@@ -1,4 +1,5 @@
-﻿// Copyright 2013 Hironori Bono. All Rights Reserved.
+// Copyright 2013 Hironori Bono. All Rights Reserved.
+// @author {Hironori Bono}
 
 // Create a namespace 'org.jsspell' used in this file.
 var org = org || {};
@@ -9,6 +10,28 @@ org.jsspell = {};
  * @define {boolean}
  */
 org.jsspell.COMPILED = false;
+
+/**
+ * Whether to enable the debugging code in this library.
+ * @define {boolean}
+ */
+org.jsspell.DEBUG = false;
+
+/**
+ * Whether to create a NodeJS module.
+ * @define {boolean}
+ */
+org.jsspell.NODEJS = false;
+
+/**
+ * A reference to the global context. The type of this object depends on the
+ * context where this system is executed. For example, when this system runs on
+ * a Web Worker, this type becomes 'WorkerContext'. On the other hand, when this
+ * system runs on an iframe, this type becomes 'Window'.
+ * @type {Object}
+ * @const
+ */
+org.jsspell.global = this;
 
 /**
  * Parses a string representing a decimal number or a hexadecimal one and
@@ -31,13 +54,39 @@ org.jsspell.parseInt = function(s) {
 };
 
 /**
+ * Writes a log message to a debug console.
+ * @param {*} message
+ */
+org.jsspell.log = function(message) {
+  if (org.jsspell.DEBUG) {
+    var jsConsole = org.jsspell.global.console;
+    if (jsConsole && jsConsole.log) {
+      jsConsole.log(message);
+    }
+  }
+};
+
+/**
+ * Writes a warning message to a debug console.
+ * @param {*} message
+ */
+org.jsspell.warn = function(message) {
+  if (org.jsspell.DEBUG) {
+    var jsConsole = org.jsspell.global.console;
+    if (jsConsole && jsConsole.warn) {
+      jsConsole.warn(message);
+    }
+  }
+};
+
+/**
  * Exposes an object and its methods to the global namespace path.
  * @param {string} name
  * @param {Object} object
  * @param {Object.<string,Function>} methods
  */
 org.jsspell.exportObject = function(name, object, methods) {
-  if (!org.jsspell.COMPILED) {
+  if (!org.jsspell.COMPILED || org.jsspell.NODEJS) {
     return;
   }
   var parts = name.split('.');
@@ -92,7 +141,8 @@ org.jsspell.readTokens = function(data, head, tail) {
   var code = 0;
   var length = 0;
   while (head < tail) {
-    /** @const {number} */ var n = data[++head];
+    /** @const {number} */ var n = data[head];
+    ++head;
     if (n == 0) {
       // This is a NUL character ('\0').
       if (token.length > 0) {
@@ -355,7 +405,7 @@ org.jsspell.RuleSet = function(token) {
  * Adds a rule to this rule set.
  * @param {org.jsspell.Rule} rule
  */
-org.jsspell.RuleSet.prototype.addRule = function(rule) {
+org.jsspell.RuleSet.prototype.addAffixRule = function(rule) {
   this.rules_.push(rule);
 };
 
@@ -377,33 +427,46 @@ org.jsspell.RuleSet.prototype.applyRules = function(word, listener) {
 };
 
 /**
- * A class representing a REP rule of hunspell, a string-replacement rule used
+ * A class implementing a REP rule of hunspell, a string-replacement rule used
  * to find suggestions for a misspelled word.
- * @param {Array.<string>} token
+ * @param {string} key
+ * @param {string} replacement
  * @constructor
  */
-org.jsspell.ReplaceRule = function(token) {
+org.jsspell.ReplaceRule = function(key, replacement) {
   /**
    * @const {string}
    * @private
    */
-  this.key_ = token[0];
+  this.key_ = key;
 
   /**
    * @const {string}
    * @private
    */
-  this.replacement_ = token[1];
+  this.replacement_ = replacement;
 };
 
 /**
- * Applies all rules in this set and returns a list of possible stems for the
- * specified word.
+ * Applies this replacement rule to the word and checks if replaced words are
+ * correctly spelled.
  * @param {string} word
- * @return {Array.<string>}
+ * @param {org.jsspell.RuleListener} listener
+ * @return {boolean}
  */
-org.jsspell.ReplaceRule.prototype.applyRules = function(word) {
-  return [];
+org.jsspell.ReplaceRule.prototype.applyRule = function(word, listener) {
+  var keySize = this.key_.length;
+  var index = 0;
+  while ((index = word.indexOf(this.key_, index)) >= 0) {
+    var newWord = (index == 0) ? '' : word.substring(0, index);
+    newWord += this.replacement_;
+    newWord += word.substring(index + keySize);
+    if (!listener.handleSuggestion(newWord)) {
+      return true;
+    }
+    index += keySize;
+  }
+  return false;
 };
 
 /**
@@ -413,17 +476,15 @@ org.jsspell.ReplaceRule.prototype.applyRules = function(word) {
  * @constructor
  */
 org.jsspell.Dictionary = function(data, size) {
-  /**
-   * The dictionary data.
-   * @const {Uint8Array}
-   */
-  this.data = data;
-
-  /**
-   * The dictionary size.
-   * @const {number}
-   */
-  this.size = size;
+  var affix = org.jsspell.read32(data, 8);
+  if (affix < 0 || affix >= size) {
+    org.jsspell.warn('Corrupted BDIC data');
+    return;
+  }
+  var group = org.jsspell.read32(data, affix);
+  var rule = org.jsspell.read32(data, affix + 4);
+  var replace = org.jsspell.read32(data, affix + 8);
+  var other = org.jsspell.read32(data, affix + 12);
 
   /**
    * The major version of this dictionary.
@@ -444,99 +505,104 @@ org.jsspell.Dictionary = function(data, size) {
   this.dictionary = org.jsspell.read32(data, 12);
 
   /**
-   * @type{number}
+   * A mapping table from an affix ID (attached to a word) to a set of affix
+   * rules.
+   * @const {Array.<string>}
    * @private
    */
-  this.status_ = 0;
+  this.affixGroups_ =
+      org.jsspell.Dictionary.readAffixGroups_(data, group, rule);
 
   /**
-   * @type{Array.<string>}
+   * Affix rules used for enumerating word stems.
+   * @const {Array.<org.jsspell.RuleSet>}
    * @private
    */
-  this.groups_ = [];
+  this.affixRules_ =
+      org.jsspell.Dictionary.readAffixRules_(data, rule, replace);
 
   /**
-   * @type{Object.<string,org.jsspell.RuleSet>}
+   * Replacement rules used for enumerating suggestions of a misspelled word.
+   * @const {Array.<org.jsspell.ReplaceRule>}
    * @private
    */
-  this.map_ = {};
-
-  /**
-   * @type{Array.<org.jsspell.RuleSet>}
-   * @private
-   */
-  this.rules_ = [];
-
-  /**
-   * @type{Array.<string>}
-   * @private
-   */
-  this.replace_ = [];
+  this.replaceRules_ =
+      org.jsspell.Dictionary.readReplaceRules_(data, replace, other);
 };
 
 /**
- * Initializes this object.
- * @return {boolean}
+ * Creates a mapping from an affix ID to an affix group (a set of affix rules).
+ * A BDIC file assigns a unique affix ID to a set of affix rules and attach
+ * affix IDs to a word to represent its affixes.
+ * @param {Uint8Array} data
+ * @param {number} head
+ * @param {number} tail
+ * @return {Array.<string>}
+ * @private
  */
-org.jsspell.Dictionary.prototype.initialize = function () {
-  // Return now if this dictionary is already initialized.
-  if (this.status_ != 0) {
-    return this.status_ > 0;
-  }
-  this.status_ = -1;
-
-  // An affix header consists of four offsets, an offset to affix groups, an
-  // offset to affix rules, an offset to replacements, and an offset to other
-  // rules.
-  var affix = org.jsspell.read32(this.data, 8);
-  if (affix < 0 || affix >= this.size) {
-    return false;
-  }
-  var group = org.jsspell.read32(this.data, affix) - 1;
-  var rule = org.jsspell.read32(this.data, affix + 4) - 1;
-  var replace = org.jsspell.read32(this.data, affix + 8) - 1;
-  var other = org.jsspell.read32(this.data, affix + 12) - 1;
-
-  // Read affix groups. A BDIC file uses an affix IDs to specify affix rules of
-  // a word.
-  var groupset = org.jsspell.readTokens(this.data, group, rule);
-  for (var i = 1; i < groupset.length; ++i) {
-    var token = groupset[i].split(' ');
+org.jsspell.Dictionary.readAffixGroups_ = function(data, head, tail) {
+  var tokens = org.jsspell.readTokens(data, head, tail);
+  var groups = [''];
+  for (var i = 1; i < tokens.length; ++i) {
+    var token = tokens[i].split(' ');
     if (token.length != 2 || token[0] != 'AF') {
-      return false;
+      return groups;
     }
-    this.groups_.push(token[1]);
+    groups.push(token[1]);
   }
+  return groups;
+};
 
-  // Read affix rules. A list of affix rules are a list of NUL-terminated
-  // strings and each string consists of four or five fields. This code creates
-  // a mapping from a affix flag to a list of affix rules.
-  var ruleset = org.jsspell.readTokens(this.data, rule, replace);
-  for (var i = 0; i < ruleset.length; ++i) {
-    var token = ruleset[i].split(' ');
+/**
+ * Creates a list of affix rules from an affix section of a BDICT file. An affix
+ * section of a BDICT file is a list of NUL-terminated strings, each of which
+ * represents an affix rule and consists of four or five fields.
+ * @param {Uint8Array} data
+ * @param {number} head
+ * @param {number} tail
+ * @return {Array.<org.jsspell.RuleSet>}
+ * @private
+ */
+org.jsspell.Dictionary.readAffixRules_ = function(data, head, tail) {
+  var tokens = org.jsspell.readTokens(data, head, tail);
+  var rules = [];
+  var map = {};
+  for (var i = 0; i < tokens.length; ++i) {
+    var token = tokens[i].split(' ');
     if (token.length < 4) {
-      return false;
+      return rules;
     }
     var command = token[0];
     var flag = token[1];
-    if (!this.map_[flag]) {
+    if (!map[flag]) {
       var newRule = new org.jsspell.RuleSet(token);
-      this.rules_.push(newRule);
-      this.map_[flag] = newRule;
+      rules.push(newRule);
+      map[flag] = newRule;
     } else if (command == 'SFX') {
-      this.map_[flag].addRule(new org.jsspell.SuffixRule(token));
+      map[flag].addAffixRule(new org.jsspell.SuffixRule(token));
     } else if (command == 'PFX') {
-      this.map_[flag].addRule(new org.jsspell.PrefixRule(token));
+      map[flag].addAffixRule(new org.jsspell.PrefixRule(token));
     }
   }
+  return rules;
+};
 
-  // Read a REP table. A REP table of a BDICT file is a list of NUL-terminated
-  // strings.
-  this.replace_ = org.jsspell.readTokens(this.data, replace, other);
-
-  // This dictionary is ready to use now.
-  this.status_ = 1;
-  return true;
+/**
+ * Creates a list of character-replacement rules.
+ * @param {Uint8Array} data
+ * @param {number} head
+ * @param {number} tail
+ * @return {Array.<org.jsspell.ReplaceRule>}
+ * @private
+ */
+org.jsspell.Dictionary.readReplaceRules_ = function(data, head, tail) {
+  var tokens = org.jsspell.readTokens(data, head, tail);
+  var replaces = [];
+  var length = tokens.length & ~1;
+  for (var i = 0; i < length; i += 2) {
+    replaces.push(new org.jsspell.ReplaceRule(tokens[i], tokens[i + 1]));
+  }
+  return replaces;
 };
 
 /**
@@ -548,9 +614,9 @@ org.jsspell.Dictionary.prototype.initialize = function () {
  * @return {boolean}
  */
 org.jsspell.Dictionary.prototype.applyRules = function(word, listener) {
-  var length = this.rules_.length;
+  var length = this.affixRules_.length;
   for (var i = 0; i < length; ++i) {
-    if (!this.rules_[i].applyRules(word, listener)) {
+    if (!this.affixRules_[i].applyRules(word, listener)) {
       return false;
     }
   }
@@ -566,7 +632,7 @@ org.jsspell.Dictionary.prototype.applyRules = function(word, listener) {
 org.jsspell.Dictionary.prototype.findRule = function(ids, flag) {
   var length = ids.length;
   for (var i = 0; i < length; ++i) {
-    var group = this.groups_[ids[i]];
+    var group = this.affixGroups_[ids[i]];
     if (group.indexOf(flag) >= 0) {
       return true;
     }
@@ -582,24 +648,14 @@ org.jsspell.Dictionary.prototype.findRule = function(ids, flag) {
  * @param {org.jsspell.RuleListener} listener
  * @return {boolean}
  */
-org.jsspell.Dictionary.prototype.getSuggestions = function(word, listener) {
+org.jsspell.Dictionary.prototype.getSuggestions = function (word, listener) {
   if (!listener.handleSuggestion(word.toUpperCase())) {
     return true;
   }
-  var length = this.replace_.length & ~1;
-  for (var i = 0; i < length; i += 2) {
-    var what = this.replace_[i];
-    var size = what.length;
-    var replacement = this.replace_[i + 1];
-    var index = 0;
-    while ((index = word.indexOf(what, index)) >= 0) {
-      var newWord = (index == 0) ? '' : word.substring(0, index);
-      newWord += replacement;
-      newWord += word.substring(index + size);
-      if (!listener.handleSuggestion(word)) {
-        return true;
-      }
-      index += size;
+  var length = this.replaceRules_.length;
+  for (var i = 0; i < length; ++i) {
+    if (this.replaceRules_[i].applyRule(word, listener)) {
+      return true;
     }
   }
   return true;
@@ -722,16 +778,16 @@ org.jsspell.Node = function(data, offset) {
   /**
    * A byte array representing BDict data.
    * @type {Uint8Array}
-   * @protected
+   * @private
    */
-  this.data = data;
+  this.data_ = data;
 
   /**
    * An offset from the beginning of the byte array to this node.
    * @type {number}
-   * @protected
+   * @private
    */
-  this.offset = offset;
+  this.offset_ = offset;
 };
 
 /**
@@ -787,12 +843,12 @@ org.jsspell.LeafNode.prototype.lookup = function(word) {
   /** @const {number} */ var FLAG_STRING = 0x40;
   /** @const {number} */ var FLAG_AFFIX = 0x20;
   /** @const {number} */ var FLAG_AFFIXID = 0x1fff;
-  var offset = this.offset;
-  /** @const {number} */ var flag = this.data[offset];
-  var affix = ((flag << 8) | this.data[++offset]) & FLAG_AFFIXID;
+  var offset = this.offset_;
+  /** @const {number} */ var flag = this.data_[offset];
+  var affix = ((flag << 8) | this.data_[++offset]) & FLAG_AFFIXID;
   if (flag & FLAG_STRING) {
     var code = 0;
-    while ((code = this.data[++offset]) != 0) {
+    while ((code = this.data_[++offset]) != 0) {
       if (word.getChar() != code) {
         return -1;
       }
@@ -806,8 +862,8 @@ org.jsspell.LeafNode.prototype.lookup = function(word) {
   }
   if (flag & FLAG_AFFIX) {
     do {
-      affix = this.data[++offset];
-      affix |= this.data[++offset] << 8;
+      affix = this.data_[++offset];
+      affix |= this.data_[++offset] << 8;
       this.affixes_.push(affix);
     } while (affix != 0xffff);
   }
@@ -840,23 +896,23 @@ org.jsspell.ListNode.prototype.lookup = function(word) {
   //   A     4    1    The size of an entry. 1 represents two bytes and 0 means
   //                   one byte, respectively.
   //   B     0    4    The length of this list.
-  var offset = this.offset;
+  var offset = this.offset_;
   /** @const {number} */ var FLAG_COUNT = 0x0f;
   /** @const {number} */ var FLAG_SIZE = 0x10;
-  /** @const {number} */ var flag = this.data[offset];
+  /** @const {number} */ var flag = this.data_[offset];
   /** @const {number} */ var size = (flag & FLAG_SIZE) ? 2 : 1;
   /** @const {number} */ var count = flag & FLAG_COUNT;
   /** @const {number} */ var key = word.getChar();
   for (var i = 0; i < count; ++i) {
-    if (key == this.data[++offset]) {
-      var value = this.data[++offset];
+    if (key == this.data_[++offset]) {
+      var value = this.data_[++offset];
       if (size == 1) {
         offset = count * 2 + value;
       } else {
-        value |= this.data[++offset] << 8;
+        value |= this.data_[++offset] << 8;
         offset = count * 3 + value;
       }
-      return this.offset + 1 + offset;
+      return this.offset_ + 1 + offset;
     }
     offset += size;
   }
@@ -889,12 +945,12 @@ org.jsspell.LookupNode.prototype.lookup = function(word) {
   //                   two bytes, respectively.
   //   B     0    1    Whether this table has a special entry for NUL characters
   //                   ('\0').
-  var offset = this.offset;
+  var offset = this.offset_;
   /** @const {number} */ var FLAG_NUL = 0x01;
   /** @const {number} */ var FLAG_SIZE = 0x02;
-  /** @const {number} */ var flag = this.data[offset];
-  /** @const {number} */ var first = this.data[++offset];
-  /** @const {number} */ var size = this.data[++offset];
+  /** @const {number} */ var flag = this.data_[offset];
+  /** @const {number} */ var first = this.data_[++offset];
+  /** @const {number} */ var size = this.data_[++offset];
 
   // Retrieve the table index for the current character.
   var index = word.getChar();
@@ -915,11 +971,11 @@ org.jsspell.LookupNode.prototype.lookup = function(word) {
   // Look up the table and retrieve the offset to the child node.
   if (flag & FLAG_SIZE) {
     index = offset + 4 * index;
-    offset = org.jsspell.read32(this.data, ++index);
+    offset = org.jsspell.read32(this.data_, ++index);
   } else {
     index = offset + 2 * index;
-    offset = org.jsspell.read16(this.data, ++index);
-    offset += this.offset;
+    offset = org.jsspell.read16(this.data_, ++index);
+    offset += this.offset_;
   }
   return offset;
 };
@@ -979,11 +1035,25 @@ org.jsspell.NodeFactory.prototype.createNode = function(offset) {
  */
 org.jsspell.SpellChecker = function(data, size) {
   /**
+   * The BDIC file.
+   * @const {Uint8Array}
+   * @private
+   */
+  this.data_ = data;
+
+  /**
+   * The size of the BDIC file.
+   * @const {number}
+   * @private
+   */
+  this.size_ = size;
+
+  /**
    * A spellchecker dictionary.
    * @type {org.jsspell.Dictionary}
    * @private
    */
-  this.dict_ = new org.jsspell.Dictionary(data, size);
+  this.dict_ = null; //new org.jsspell.Dictionary(data, size);
 
   /**
    * A factory that creates Node objects.
@@ -1022,6 +1092,7 @@ org.jsspell.SpellChecker = function(data, size) {
  * @private
  */
 org.jsspell.SpellChecker.prototype.findWord_ = function(word, flag) {
+  org.jsspell.log('findWord_(): word="' + word + '".');
   // Traverse the dictionary trie.
   var iterator = new org.jsspell.CharacterIterator(word);
   var offset = this.dict_.dictionary;
@@ -1078,6 +1149,7 @@ org.jsspell.SpellChecker.prototype.handleMatch = function(word, flag) {
 org.jsspell.SpellChecker.prototype.handleSuggestion = function(word) {
   // Find whether this dictionary has the given word stem. This function returns
   // true if it does not have the word to get the next candidate.
+  org.jsspell.log('handleSuggestion(): word="' + word + '".');
   this.testWord_(word);
   return true;
 };
@@ -1094,8 +1166,11 @@ org.jsspell.SpellChecker.prototype.handleSuggestion = function(word) {
 org.jsspell.SpellChecker.prototype.spell = function(word, opt_suggestions) {
   // Initialize the spellchecker dictionary. If there is an error while
   // initializing it, return true to prevent treating all words as misspelled.
-  if (!this.dict_.initialize()) {
-    return true;
+  if (!this.dict_) {
+    this.dict_ = new org.jsspell.Dictionary(this.data_, this.size_);
+    if (!this.dict_.dictionary) {
+      return true;
+    }
   }
   if (this.findWord_(word, '')) {
     return true;
@@ -1113,7 +1188,23 @@ org.jsspell.SpellChecker.prototype.spell = function(word, opt_suggestions) {
 };
 
 // Export the org.jsspell.SpellChecker class and its spell method.
-org.jsspell.exportObject(
-    'org.jsspell.SpellChecker',
-    org.jsspell.SpellChecker,
-    {'spell': org.jsspell.SpellChecker.prototype.spell});
+org.jsspell.exportObject('org.jsspell.SpellChecker', org.jsspell.SpellChecker, {
+  'spell': org.jsspell.SpellChecker.prototype.spell
+});
+
+// Attach the org.jsspell.SpellChecker object to the module.exports object to
+// export this spellchecker object on NodeJS. (This code is a little tricky to
+// avoid compilation errors when compiling this file with the closure compiler.)
+if (org.jsspell.NODEJS) {
+  var module = module || {};
+  var jsObject = org.jsspell.SpellChecker;
+  if (org.jsspell.COMPILED) {
+    var jsMethods = {
+      'spell': org.jsspell.SpellChecker.prototype.spell
+    };
+    for (var key in jsMethods) {
+      jsObject.prototype[key] = jsMethods[key];
+    }
+  }
+  module['exports'] = jsObject;
+}
