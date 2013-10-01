@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8' />
+    <meta http-equiv="X-UA-Compatible" content="chrome=1" />
+    <meta name="description" content="Jsspell : A spellchecker written in JavaScript" />
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>Jsspell</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/hbono/jsSpell">View on GitHub</a>
+
+          <h1 id="project_title">Jsspell</h1>
+          <h2 id="project_tagline">A spellchecker written in JavaScript</h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/hbono/jsSpell/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/hbono/jsSpell/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <h1>
+<a name="jsspell---a-spellchecker-written-in-javascript" class="anchor" href="#jsspell---a-spellchecker-written-in-javascript"><span class="octicon octicon-link"></span></a>jsSpell - a spellchecker written in JavaScript</h1>
+
+<h2>
+<a name="background" class="anchor" href="#background"><span class="octicon octicon-link"></span></a>Background</h2>
+
+<p>This spellchecker is a subset of the spellchecker of Chromium written in JavaScript so JavaScript applications can check words with spellchecker dictionaries used by Chromium. Chromium uses a custom version of hunspell to use custom spellchecker dictionaries, which is called as BDICTs. This library reads BDICT dictionaries used by Chromium and check words with them. (This is just a prototype and it does not implement all features of hunspell, though.)
+For those who like to evaluate jsSpell with your browser, we provide <a href="http://hbono.github.io/jsSpell/jsspell-test.html">a test page</a> that spell-checks words with spellchecker dictionaries of Chromium.</p>
+
+<h2>
+<a name="usage" class="anchor" href="#usage"><span class="octicon octicon-link"></span></a>Usage</h2>
+
+<p>This library is implemented in pure JavaScript and works with all major browsers (Firefox, Google Chrome, IE10+, Safari, etc.) This library also includes a sample web application 'jsspell.html' and 'jsspell-test.js' so we can check words with BDICT dictionaries. To use this sample application, follow the steps listed below.</p>
+
+<ol>
+<li>Download BDICT files from <a href="http://src.chromium.org/viewvc/chrome/trunk/deps/third_party/hunspell_dictionaries/">the Chromium repository</a>.</li>
+<li>Download all JavaScript files and HTML files in this project.</li>
+<li>Open <a href="http://hbono.github.io/jsSpell/jsspell-test.html">the test page</a> with your favorite browser.</li>
+<li>Open a BDICT file in the test page.</li>
+<li>Type a word in the "Word" input box and press the "OK" button.</li>
+</ol>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">Jsspell maintained by <a href="https://github.com/hbono">hbono</a></p>
+        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+    
+
+  </body>
+</html>
