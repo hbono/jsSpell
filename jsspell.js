@@ -310,7 +310,7 @@ org.jsspell.Rule.prototype.getExpression_ = function() {
 org.jsspell.PrefixRule = function(token) {
   org.jsspell.Rule.call(this, token);
 };
-org.jsspell.PrefixRule.prototype = new org.jsspell.Rule;
+org.jsspell.PrefixRule.prototype = Object.create(org.jsspell.Rule.prototype);
 
 /** @override */
 org.jsspell.PrefixRule.prototype.getStem_ = function(word) {
@@ -827,7 +827,7 @@ org.jsspell.LeafNode = function(data, offset) {
    */
   this.affixes_ = [];
 };
-org.jsspell.LeafNode.prototype = new org.jsspell.Node(null, 0);
+org.jsspell.LeafNode.prototype = Object.create(org.jsspell.Node.prototype);
 
 /** @override */
 org.jsspell.LeafNode.prototype.lookup = function(word) {
@@ -887,7 +887,7 @@ org.jsspell.LeafNode.prototype.getAffixIDs = function() {
 org.jsspell.ListNode = function(data, offset) {
   org.jsspell.Node.call(this, data, offset);
 };
-org.jsspell.ListNode.prototype = new org.jsspell.Node(null, 0);
+org.jsspell.ListNode.prototype = Object.create(org.jsspell.Node.prototype);
 
 /** @override */
 org.jsspell.ListNode.prototype.lookup = function(word) {
@@ -935,7 +935,7 @@ org.jsspell.ListNode.prototype.lookup = function(word) {
 org.jsspell.LookupNode = function(data, offset) {
   org.jsspell.Node.call(this, data, offset);
 };
-org.jsspell.LookupNode.prototype = new org.jsspell.Node(null, 0);
+org.jsspell.LookupNode.prototype = Object.create(org.jsspell.Node.prototype);
 
 /** @override */
 org.jsspell.LookupNode.prototype.lookup = function(word) {
