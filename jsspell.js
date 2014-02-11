@@ -340,7 +340,7 @@ org.jsspell.PrefixRule.prototype.getExpression_ = function() {
 org.jsspell.SuffixRule = function(token) {
   org.jsspell.Rule.call(this, token);
 };
-org.jsspell.SuffixRule.prototype = new org.jsspell.Rule;
+org.jsspell.SuffixRule.prototype = Object.create(org.jsspell.Rule.prototype);
 
 /** @override */
 org.jsspell.SuffixRule.prototype.getStem_ = function(word) {
@@ -648,7 +648,7 @@ org.jsspell.Dictionary.prototype.findRule = function(ids, flag) {
  * @param {org.jsspell.RuleListener} listener
  * @return {boolean}
  */
-org.jsspell.Dictionary.prototype.getSuggestions = function (word, listener) {
+org.jsspell.Dictionary.prototype.getSuggestions = function(word, listener) {
   if (!listener.handleSuggestion(word.toUpperCase())) {
     return true;
   }
