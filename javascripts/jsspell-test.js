@@ -18,7 +18,7 @@ test.checkWord_ = function () {
   var result = test.spellchecker_.spell(word, suggestions);
 
   var output = document.getElementById('result');
-  output.innerHTML =
+  output.textContent =
       'word=\"' + word + '\", ' +
       'result=' + result + ', ' +
       'suggestions=[' + suggestions.join() + ']';
@@ -76,7 +76,7 @@ test.handleChange_ = function(event) {
  */
 test.addFileInput_ = function(parent) {
   var group = document.createElement('div');
-  group.innerText = 'BDICT file: ';
+  group.textContent = 'BDICT file: ';
   parent.appendChild(group);
 
   var bdic = document.createElement('input');
@@ -93,7 +93,7 @@ test.addFileInput_ = function(parent) {
  */
 test.addWordInput_ = function(parent) {
   var group = document.createElement('div');
-  group.innerText = 'Word: ';
+  group.textContent = 'Word: ';
   parent.appendChild(group);
 
   var word = document.createElement('input');
