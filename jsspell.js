@@ -1,7 +1,13 @@
-// Copyright 2013 Hironori Bono. All Rights Reserved.
-// @author {Hironori Bono}
+// Copyright 2014 Hironori Bono. All Rights Reserved.
 
-// Create a namespace 'org.jsspell' used in this file.
+/**
+ * @fileoverview to be written.
+ * @author hbono@github.com (Hironori Bono)
+ */
+
+/**
+ * @namespace org.jsspell
+ */
 var org = org || {};
 org.jsspell = {};
 
@@ -32,16 +38,6 @@ org.jsspell.NODEJS = false;
  * @const
  */
 org.jsspell.global = this;
-
-/**
- * Parses a string representing a decimal number or a hexadecimal one and
- * returns an integral number.
- * @param {string} s
- * @return {number}
- */
-org.jsspell.parseFloat = function(s) {
-  return (/** @type{number} */ (/** @type{*} */ (s))) - 0;
-};
 
 /**
  * Parses a string representing a decimal number or a hexadecimal one and
@@ -167,6 +163,8 @@ org.jsspell.readTokens = function(data, head, tail) {
         code = n & 0x07;
         length = 3;
       } else {
+        // This seems to be the first byte of a Unicode code-point above
+        // U+1FFFFF, which cannot be represented by UTF-16.
         return tokens;
       }
     } else if (n < 0x80 || n >= 0xe0) {
@@ -211,48 +209,60 @@ org.jsspell.RuleListener.prototype.handleMatch = function(word, flag) {};
 org.jsspell.RuleListener.prototype.handleSuggestion = function(word) {};
 
 /**
+ * An interface that provides a method that enumerates words matching to a word.
+ * @interface
+ */
+org.jsspell.MatchRule = function() {};
+
+/**
+ * Applies this rule to the specified word and returns its stem. If 
+ * @param {string} word
+ * @param {org.jsspell.RuleListener} listener
+ * @return {boolean}
+ */
+org.jsspell.MatchRule.prototype.applyRule = function(word, listener) {};
+
+/**
  * A base class that retrieves (possible) stems of a word.
- * @param {Array.<string>=} opt_token
+ * @param {Array.<string>} token
  * @constructor
  */
-org.jsspell.Rule = function(opt_token) {
-  if (opt_token && opt_token.length > 3) {
-    var strip = opt_token[2];
-    var affix = opt_token[3];
-    var condition = opt_token[4] || '';
+org.jsspell.AffixRule = function(token) {
+  var strip = token[2];
+  var affix = token[3];
+  var condition = token[4] || '';
 
-    /**
-     * A prefix or a suffix to be added to words.
-     * @const {string}
-     * @protected
-     */
-    this.affix = affix;
+  /**
+   * A prefix or a suffix to be added to words.
+   * @const {string}
+   * @protected
+   */
+  this.affix = affix;
 
-    /**
-     * a string to be stripped by this rule. When this rule is a prefix rule,
-     * it strips this string from the beginning of a matching word. On the other
-     * hand, if this rule is a suffix rule, it strips this string from the end
-     * of a matching word.
-     * @const {string}
-     * @protected
-     */
-    this.strip = (strip == '0') ? '' : strip;
+  /**
+   * a string to be stripped by this rule. When this rule is a prefix rule,
+   * it strips this string from the beginning of a matching word. On the other
+   * hand, if this rule is a suffix rule, it strips this string from the end
+   * of a matching word.
+   * @const {string}
+   * @protected
+   */
+  this.strip = (strip == '0') ? '' : strip;
 
-    /**
-     * A string representing the condition to apply this rule.
-     * @const {string}
-     * @protected
-     */
-    this.condition = (condition == '.') ? '' : condition;
+  /**
+   * A string representing the condition to apply this rule.
+   * @const {string}
+   * @protected
+   */
+  this.condition = (condition == '.') ? '' : condition;
 
-    /**
-     * A regular expression created from the |condition_| member. (This regular
-     * expression is created the first time when this rule is used.)
-     * @type {?RegExp}
-     * @private
-     */
-    this.expression_ = null;
-  }
+  /**
+   * A regular expression created from the |condition_| member. (This regular
+   * expression is created the first time when this rule is used.)
+   * @type {?RegExp}
+   * @private
+   */
+  this.expression_ = null;
 };
 
 /**
@@ -262,7 +272,7 @@ org.jsspell.Rule = function(opt_token) {
  * @param {org.jsspell.RuleListener} listener
  * @return {boolean}
  */
-org.jsspell.Rule.prototype.applyRule = function(word, flag, listener) {
+org.jsspell.AffixRule.prototype.applyRule = function(word, flag, listener) {
   if (word.length <= this.affix.length) {
     return true;
   }
@@ -287,7 +297,7 @@ org.jsspell.Rule.prototype.applyRule = function(word, flag, listener) {
  * @return {string}
  * @private
  */
-org.jsspell.Rule.prototype.getStem_ = function(word) {
+org.jsspell.AffixRule.prototype.getStem_ = function(word) {
   return '';
 };
 
@@ -297,20 +307,21 @@ org.jsspell.Rule.prototype.getStem_ = function(word) {
  * @return {string}
  * @private
  */
-org.jsspell.Rule.prototype.getExpression_ = function() {
+org.jsspell.AffixRule.prototype.getExpression_ = function() {
   return '';
 };
 
 /**
  * A class implementing a suffix rule used by the Chromium spellchecker.
  * @param {Array.<string>} token
- * @extends {org.jsspell.Rule}
+ * @extends {org.jsspell.AffixRule}
  * @constructor
  */
 org.jsspell.PrefixRule = function(token) {
-  org.jsspell.Rule.call(this, token);
+  org.jsspell.AffixRule.call(this, token);
 };
-org.jsspell.PrefixRule.prototype = Object.create(org.jsspell.Rule.prototype);
+org.jsspell.PrefixRule.prototype =
+    Object.create(org.jsspell.AffixRule.prototype);
 
 /** @override */
 org.jsspell.PrefixRule.prototype.getStem_ = function(word) {
@@ -334,13 +345,14 @@ org.jsspell.PrefixRule.prototype.getExpression_ = function() {
 /**
  * A class implementing a suffix rule used by the Chromium spellchecker.
  * @param {Array.<string>} token
- * @extends {org.jsspell.Rule}
+ * @extends {org.jsspell.AffixRule}
  * @constructor
  */
 org.jsspell.SuffixRule = function(token) {
-  org.jsspell.Rule.call(this, token);
+  org.jsspell.AffixRule.call(this, token);
 };
-org.jsspell.SuffixRule.prototype = Object.create(org.jsspell.Rule.prototype);
+org.jsspell.SuffixRule.prototype =
+    Object.create(org.jsspell.AffixRule.prototype);
 
 /** @override */
 org.jsspell.SuffixRule.prototype.getStem_ = function(word) {
@@ -363,9 +375,13 @@ org.jsspell.SuffixRule.prototype.getExpression_ = function() {
 
 /**
  * A class representing a set of affix rules. An "affix rule" of hunspell is
- * actually a set of string-replacement rules.
- *   PFX A Y 1
+ * actually a set of string-replacement rules and its header consists of four
+ * strings listed below:
+ *   TYPE FLAG CROSSPRODUCT COUNT
+ * The TYPE parameter is either 'PFX', which represents this rule is a prefix
+ * rule, or 'SFX', which represents this rule is a suffix rule.
  * @param {Array.<string>} token
+ * @implements {org.jsspell.MatchRule}
  * @constructor
  */
 org.jsspell.RuleSet = function(token) {
@@ -395,7 +411,7 @@ org.jsspell.RuleSet = function(token) {
   this.count_ = count ? org.jsspell.parseInt(count) : 0;
 
   /**
-   * @type {Array.<org.jsspell.Rule>}
+   * @type {Array.<org.jsspell.AffixRule>}
    * @private
    */
   this.rules_ = [];
@@ -403,20 +419,14 @@ org.jsspell.RuleSet = function(token) {
 
 /**
  * Adds a rule to this rule set.
- * @param {org.jsspell.Rule} rule
+ * @param {org.jsspell.AffixRule} rule
  */
 org.jsspell.RuleSet.prototype.addAffixRule = function(rule) {
   this.rules_.push(rule);
 };
 
-/**
- * Applies all rules in this set and calls the specified callback function if
- * there is a rule matching to the specified word.
- * @param {string} word
- * @param {org.jsspell.RuleListener} listener
- * @return {boolean}
- */
-org.jsspell.RuleSet.prototype.applyRules = function(word, listener) {
+/** @override */
+org.jsspell.RuleSet.prototype.applyRule = function(word, listener) {
   var index = this.rules_.length;
   while (--index >= 0) {
     if (!this.rules_[index].applyRule(word, this.flag_, listener)) {
@@ -427,10 +437,24 @@ org.jsspell.RuleSet.prototype.applyRules = function(word, listener) {
 };
 
 /**
+ * A class that suggests the upper-case word of a misspelled word.
+ * @implements {org.jsspell.MatchRule}
+ * @constructor
+ */
+org.jsspell.CapitalizeRule = function() {
+};
+
+/** @override */
+org.jsspell.CapitalizeRule.prototype.applyRule = function(word, listener) {
+  return !listener.handleSuggestion(word.toUpperCase());
+};
+
+/**
  * A class implementing a REP rule of hunspell, a string-replacement rule used
  * to find suggestions for a misspelled word.
  * @param {string} key
  * @param {string} replacement
+ * @implements {org.jsspell.MatchRule}
  * @constructor
  */
 org.jsspell.ReplaceRule = function(key, replacement) {
@@ -447,13 +471,7 @@ org.jsspell.ReplaceRule = function(key, replacement) {
   this.replacement_ = replacement;
 };
 
-/**
- * Applies this replacement rule to the word and checks if replaced words are
- * correctly spelled.
- * @param {string} word
- * @param {org.jsspell.RuleListener} listener
- * @return {boolean}
- */
+/** @override */
 org.jsspell.ReplaceRule.prototype.applyRule = function(word, listener) {
   var keySize = this.key_.length;
   var index = 0;
@@ -523,11 +541,11 @@ org.jsspell.Dictionary = function(data, size) {
 
   /**
    * Replacement rules used for enumerating suggestions of a misspelled word.
-   * @const {Array.<org.jsspell.ReplaceRule>}
+   * @const {Array.<org.jsspell.MatchRule>}
    * @private
    */
-  this.replaceRules_ =
-      org.jsspell.Dictionary.readReplaceRules_(data, replace, other);
+  this.suggestRules_ =
+      org.jsspell.Dictionary.getSuggestRules_(data, replace, other);
 };
 
 /**
@@ -592,23 +610,25 @@ org.jsspell.Dictionary.readAffixRules_ = function(data, head, tail) {
  * @param {Uint8Array} data
  * @param {number} head
  * @param {number} tail
- * @return {Array.<org.jsspell.ReplaceRule>}
+ * @return {Array.<org.jsspell.MatchRule>}
  * @private
  */
-org.jsspell.Dictionary.readReplaceRules_ = function(data, head, tail) {
+org.jsspell.Dictionary.getSuggestRules_ = function(data, head, tail) {
+  var rules = [];
+  rules.push(new org.jsspell.CapitalizeRule());
+
   var tokens = org.jsspell.readTokens(data, head, tail);
-  var replaces = [];
   var length = tokens.length & ~1;
   for (var i = 0; i < length; i += 2) {
-    replaces.push(new org.jsspell.ReplaceRule(tokens[i], tokens[i + 1]));
+    rules.push(new org.jsspell.ReplaceRule(tokens[i], tokens[i + 1]));
   }
-  return replaces;
+  return rules;
 };
 
 /**
- * Applies all affix rules in this dictionary to the specified word. When there
- * is a rule matching to the word, it calls a callback of the specified
- * listener.
+ * Applies all word-matching rules in this dictionary to the specified word.
+ * When there is a rule matching to the word, it calls a callback of the
+ * specified listener.
  * @param {string} word
  * @param {org.jsspell.RuleListener} listener
  * @return {boolean}
@@ -616,7 +636,7 @@ org.jsspell.Dictionary.readReplaceRules_ = function(data, head, tail) {
 org.jsspell.Dictionary.prototype.applyRules = function(word, listener) {
   var length = this.affixRules_.length;
   for (var i = 0; i < length; ++i) {
-    if (!this.affixRules_[i].applyRules(word, listener)) {
+    if (!this.affixRules_[i].applyRule(word, listener)) {
       return false;
     }
   }
@@ -649,12 +669,9 @@ org.jsspell.Dictionary.prototype.findRule = function(ids, flag) {
  * @return {boolean}
  */
 org.jsspell.Dictionary.prototype.getSuggestions = function(word, listener) {
-  if (!listener.handleSuggestion(word.toUpperCase())) {
-    return true;
-  }
-  var length = this.replaceRules_.length;
+  var length = this.suggestRules_.length;
   for (var i = 0; i < length; ++i) {
-    if (this.replaceRules_[i].applyRule(word, listener)) {
+    if (this.suggestRules_[i].applyRule(word, listener)) {
       return true;
     }
   }
@@ -1053,7 +1070,7 @@ org.jsspell.SpellChecker = function(data, size) {
    * @type {org.jsspell.Dictionary}
    * @private
    */
-  this.dict_ = null; //new org.jsspell.Dictionary(data, size);
+  this.dict_ = null;
 
   /**
    * A factory that creates Node objects.
