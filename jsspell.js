@@ -187,6 +187,106 @@ org.jsspell.readTokens = function(data, head, tail) {
 };
 
 /**
+ * Returns whether the given code-point represents an upper-case character.
+ * @return {boolean}
+ */
+org.jsspell.isUpperCase = function(code) {
+  var UPPER_CASE = [
+    // header
+    264, 272, 280, 288, 296, 304, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    312, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 320, 328, 336,
+    256, 344, 256, 256, 352, 256, 256, 256,
+    256, 256, 256, 256, 360, 256, 256, 256,
+    256, 256, 256, 368, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 376, 384,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 256,
+    256, 256, 256, 256, 256, 256, 256, 392,
+    // bit masks
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x07FFFFFE, 0x00000000,
+    0x00000000, 0x00000000, 0x7F7FFFFF, 0x00000000,
+    0x55555555, 0xAA555555, 0x555554AA, 0x2B555555,
+    0xB1DBCED6, 0x11AED295, 0x4AAAADB0, 0x55D65555,
+    0x55555555, 0x6C055555, 0x0000557A, 0x00500404,
+    0x9A008003, 0x00400000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00450000,
+    0xFFFED740, 0x00000FFB, 0x00008000, 0xE6905554,
+    0xFFFFFFFF, 0x0000FFFF, 0x00000000, 0x55555555,
+    0x55555401, 0x55555555, 0x55552AAA, 0x55555555,
+    0x55555555, 0xFFFE0055, 0x007FFFFF, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0xFFFFFFFF, 0x0000003F, 0x00000000,
+    0x1F21FCFB, 0xFFFFFFCF, 0x00000007, 0x48000000,
+    0x00000000, 0x010108C0, 0xC8000000, 0x00000006,
+    0x55555555, 0x55555555, 0x55555555, 0x55555555,
+    0x40155555, 0x55555555, 0x55555555, 0x55555555,
+    0x3F00FF00, 0xFF00FF00, 0xAA003F00, 0x0000FF00,
+    0xFF00FF00, 0x1F00FF00, 0x0F001F00, 0x1F001F00,
+    0x3F273804, 0xC40F3110, 0x0000003E, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0xFFC00000, 0x0000FFFF, 0x00000000,
+    0xFFFFFFFF, 0x00007FFF, 0x00000000, 0xE825EA9D,
+    0x55555555, 0x55555555, 0x55555555, 0x00002805,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00004000, 0x00000000,
+    0x00000000, 0x00000000, 0x55555555, 0x00001555,
+    0x00555555, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x55575554, 0x55555555, 0x6A405555,
+    0x00012855, 0x00000155, 0x00000000, 0x04000000,
+    0x00000000, 0x07FFFFFE, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000
+  ];
+  if (code > 0xffff) {
+    return false;
+  }
+  var high = code >> 8;
+  var low = (code >> 5) & 0x7;
+  var bits = code & 0x1f;
+  var index = UPPER_CASE[high];
+  return (UPPER_CASE[index + low] & (1 << bits)) != 0;
+};
+
+/**
+ * An interface that provides a method that cleans up a word.
+ * @interface
+ */
+org.jsspell.DictionaryDelegate = function() {};
+
+/**
+ * Applies this rule to the specified word and returns its stem. If 
+ * @param {string} word
+ * @return {string}
+ */
+org.jsspell.DictionaryDelegate.prototype.cleanWord = function(word) {};
+
+/**
  * An interface that observes events sent by org.jsspell.Rule
  * objects.
  * @interface
@@ -437,6 +537,53 @@ org.jsspell.RuleSet.prototype.applyRule = function(word, listener) {
 };
 
 /**
+ * A class that decomposes a camel-case word into words and checks whether all
+ * decomposed words are correct ones. For example, 
+ * CamelCaseWord -> 'camel' + 'case' + 'word'
+ * @param {org.jsspell.DictionaryDelegate} delegate
+ * @implements {org.jsspell.MatchRule}
+ * @constructor
+ */
+org.jsspell.CamelCaseRuleSet = function(delegate) {
+  /**
+   * @type {org.jsspell.DictionaryDelegate}
+   * @private
+   */
+  this.delegate_ = delegate;
+};
+
+/** @override */
+org.jsspell.CamelCaseRuleSet.prototype.applyRule = function(word, listener) {
+  var tokens = [];
+  var start = 0;
+  var isUpperPrevious = true;
+  for (var i = 0; i < word.length; ++i) {
+    var isUpper = org.jsspell.isUpperCase(word.charCodeAt(i));
+    if (!isUpperPrevious && isUpper) {
+      var token = this.delegate_.cleanWord(word.substring(start, i));
+      if (token) {
+        tokens.push(token);
+      }
+      start = i;
+    }
+    isUpperPrevious = isUpper;
+  }
+  if (start < word.length) {
+    var token = this.delegate_.cleanWord(word.substring(start, i));
+    if (token) {
+      tokens.push(token);
+    }
+  }
+
+  for (var i = 0; i < tokens.length; ++i) {
+    if (listener.handleMatch(tokens[i], '')) {
+      return true;
+    }
+  }
+  return false;
+};
+
+/**
  * A class that suggests the upper-case word of a misspelled word.
  * @implements {org.jsspell.MatchRule}
  * @constructor
@@ -491,6 +638,7 @@ org.jsspell.ReplaceRule.prototype.applyRule = function(word, listener) {
  * A class that represents a dictionary used by the spellchecker class.
  * @param {Uint8Array} data
  * @param {number} size
+ * @implements {org.jsspell.DictionaryDelegate}
  * @constructor
  */
 org.jsspell.Dictionary = function(data, size) {
@@ -676,6 +824,11 @@ org.jsspell.Dictionary.prototype.getSuggestions = function(word, listener) {
     }
   }
   return true;
+};
+
+/** @override */
+org.jsspell.Dictionary.prototype.cleanWord = function(word) {
+  return word.toLowerCase();
 };
 
 /**
